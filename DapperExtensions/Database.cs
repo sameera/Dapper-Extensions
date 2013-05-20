@@ -8,7 +8,7 @@ using DapperExtensions.Sql;
 
 namespace DapperExtensions
 {
-    public interface IDatabase
+    public interface IDatabase : IDisposable
     {
         bool HasActiveTransaction { get; }
         IDbConnection Connection { get; }
@@ -16,7 +16,9 @@ namespace DapperExtensions
         void Commit();
         void Rollback();
         void RunInTransaction(Action action);
+        void RunInCurrentTransaction(Action<IDbTransaction> action);
         T RunInTransaction<T>(Func<T> func);
+        T RunInCurrentTransaction<T>(Func<IDbTransaction, T> func);
         T Get<T>(dynamic id, IDbTransaction transaction, int? commandTimeout = null) where T : class;
         T Get<T>(dynamic id, int? commandTimeout = null) where T : class;
         void Insert<T>(IEnumerable<T> entities, IDbTransaction transaction, int? commandTimeout = null) where T : class;
@@ -42,7 +44,7 @@ namespace DapperExtensions
         IClassMapper GetMap<T>() where T : class;
     }
 
-    public class Database : IDatabase, IDisposable
+    public class Database : IDatabase
     {
         private readonly IDapperImplementor _dapper;
 
@@ -80,6 +82,9 @@ namespace DapperExtensions
 
                 Connection.Close();
             }
+            Connection.Dispose();
+
+            GC.SuppressFinalize(this);
         }
 
         public void BeginTransaction(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted)
@@ -118,6 +123,11 @@ namespace DapperExtensions
             }
         }
 
+        public void RunInCurrentTransaction(Action<IDbTransaction> action)
+        {
+            action(_transaction);
+        }
+
         public T RunInTransaction<T>(Func<T> func)
         {
             BeginTransaction();
@@ -136,6 +146,11 @@ namespace DapperExtensions
 
                 throw ex;
             }
+        }
+
+        public T RunInCurrentTransaction<T>(Func<IDbTransaction, T> func)
+        {
+            return func(_transaction);
         }
         
         public T Get<T>(dynamic id, IDbTransaction transaction, int? commandTimeout) where T : class
