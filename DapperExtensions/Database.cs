@@ -16,9 +16,7 @@ namespace DapperExtensions
         void Commit();
         void Rollback();
         void RunInTransaction(Action action);
-        void RunInCurrentTransaction(Action<IDbTransaction> action);
         T RunInTransaction<T>(Func<T> func);
-        T RunInCurrentTransaction<T>(Func<IDbTransaction, T> func);
         T Get<T>(dynamic id, IDbTransaction transaction, int? commandTimeout = null) where T : class;
         T Get<T>(dynamic id, int? commandTimeout = null) where T : class;
         void Insert<T>(IEnumerable<T> entities, IDbTransaction transaction, int? commandTimeout = null) where T : class;
@@ -50,6 +48,8 @@ namespace DapperExtensions
 
         private IDbTransaction _transaction;
 
+        protected IDbTransaction ActiveTransaction { get { return _transaction; } }
+
         public Database(IDbConnection connection, ISqlGenerator sqlGenerator)
         {
             _dapper = new DapperImplementor(sqlGenerator);
@@ -71,7 +71,7 @@ namespace DapperExtensions
 
         public IDbConnection Connection { get; private set; }
 
-        public void Dispose()
+        public virtual void Dispose()
         {
             if (Connection.State != ConnectionState.Closed)
             {
@@ -123,11 +123,6 @@ namespace DapperExtensions
             }
         }
 
-        public void RunInCurrentTransaction(Action<IDbTransaction> action)
-        {
-            action(_transaction);
-        }
-
         public T RunInTransaction<T>(Func<T> func)
         {
             BeginTransaction();
@@ -146,11 +141,6 @@ namespace DapperExtensions
 
                 throw ex;
             }
-        }
-
-        public T RunInCurrentTransaction<T>(Func<IDbTransaction, T> func)
-        {
-            return func(_transaction);
         }
         
         public T Get<T>(dynamic id, IDbTransaction transaction, int? commandTimeout) where T : class
